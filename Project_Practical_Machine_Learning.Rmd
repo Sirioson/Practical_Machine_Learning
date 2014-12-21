@@ -1,13 +1,10 @@
----
-output: pdf_document
----
 ## Practical Machine Learning: Human Activity Recognition
 
 
 ### Executive Summary
-A prediction model was build to predict the activity a human is undertaking from the data avalaible in the Human Activity Recognition dataset delivered by [1].
+A prediction model was build to predict the activity a human is undertaking from the data available in the Human Activity Recognition dataset delivered by [1].
 
-The final predictive model is a random forest with an cross-validated accuracy of 0.96 and a kappa of 0.95. The 95% confidence interval of the accuracy is (0.947, 0.972). Because cross-validation on a "untouched" test set was used, the obtained estimated accuracy is a reliable estimate for the accuracy.
+The final predictive model is a random forest with an cross-validated (out-of-sample) accuracy of 0.96 and a kappa of 0.95. The 95% confidence interval of the accuracy is (0.947, 0.972). Because cross-validation on a untouched test set was used (the test set was not used for building the model), the obtained estimated accuracy is a reliable estimate for the accuracy. The out-of-sample error is 1 - 0.96 = 0.04.
 
 Last, the target of 20 problems were all correctly predicted with the model.
 
@@ -24,7 +21,7 @@ First step in the cleaning is dropping the variables which are not useful for th
 Also, as there are no time-series used in the prediction, the time-stamps were dropped. In both the training set and the problem set, the following variables were dropped:
 "X","user_name","raw_timestamp_part_1","raw_timestamp_part_2","cvtd_timestamp", "new_window", "num_window".
 
-To start easy, all variables which are boolean or a factor were dropped, again in both sets. All cleaning, and all transformations must be undertaken on both sets, as the problem set must stay in sync with the training set, because later on, the prediction model will be aplied to the problem set to obtain predictions of the target variable.
+To start easy, all variables which are boolean or a factor were dropped, again in both sets. All cleaning, and all transformations must be undertaken on both sets, as the problem set must stay in sync with the training set, because later on, the prediction model will be applied to the problem set to obtain predictions of the target variable.
 
 All occurrences of "#DIV/0!" were replaced by NA.
 
@@ -36,12 +33,12 @@ Variables which only contain 1 unique value were dropped too, as these contain a
 
 First, all NA's were replaced with a value obtained by imputing the median. Perhaps imputing with a K-nearest neighbour algorithm would give better results. However, as a first try, it is always nice to start simple, and build from there whenever you need more precise results. And, as shown later, this was sufficient.
 
-Then, all colums were standardised. The mean and standard deviation of each column of the training set were determined. With the means and standard deviations (of the training set!), the training set was standardised, and the same transformation was applied to the problem set. Standardisation is a good step before applying PCA.
+Then, all columns were standardised. The mean and standard deviation of each column of the training set were determined. With the means and standard deviations (of the training set!), the training set was standardised, and the same transformation was applied to the problem set. Standardisation is a good step before applying PCA.
 
 PCA was applied to keep most information, but to reduce the number of variables. Later on, it is established that keeping 90% of the variance, which reduced the set from some 143 to 46 variables, delivered a sufficiently good prediction model to get all 20 problems right.
 By trying different values of the variance to be kept, and then making a prediction model and taking the accuracy determined on an untouched test set, a reasonable value of this parameter was obtained.
 
-Next the training set is split in a training set and test set to enable cross-validation and obtaining a very reliable estime of the accuracy of the model built. This test set is labeled (in contrast to the file "pml-testing.csv"!), so this set can be used to establish the accuracy of the model. As the original training set contains almost 20.000 labeled observations, and there are 5 different outcomes for the target, taking 95% of the observations for training the model, and 5% of the observations, which are still almost 1000 labeled observations for the test set, did nicely.
+Next the training set is split in a training set and test set to enable cross-validation and obtaining a very reliable (out-of-sample) estimate of the accuracy of the model built. This test set is labeled (we know what the targets are, in contrast to the file "pml-testing.csv"!), so this set can be used to establish the accuracy of the model. As the original training set contains almost 20.000 labeled observations, and there are 5 different outcomes for the target, taking 95% of the observations for training the model, and 5% of the observations, which are still almost 1000 labeled observations for the test set, did nicely.
 
 ### Prediction model
 
@@ -178,7 +175,7 @@ trainAll <- trainAll[, !var_to_be_removed]
 problAll <- problAll[, !var_to_be_removed]
 
 # preprocessing: impute NA's with the median
-# because all columns must be numeric, discart the variable "classe"
+# because all columns must be numeric, discard the variable "classe"
 preProc <- preProcess(x=trainAll[,names(trainAll)!="classe"], method="medianImpute")
 # it seems that preProcess uses only 217 samples to determine the medians
 trainAll <- predict(preProc, trainAll)
@@ -186,7 +183,7 @@ problAll <- predict(preProc, problAll)
 
 # standardise
 
-# Move last column to seperate data frames
+# Move last column to separate data frames
 trainExpl <- trainAll[,names(trainAll)!="classe"]
 trainResp <- trainAll[,names(trainAll)=="classe"]
 problExpl <- problAll[,names(problAll)!="problem_id"]
