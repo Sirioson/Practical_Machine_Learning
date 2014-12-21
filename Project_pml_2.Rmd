@@ -1,0 +1,151 @@
+```{r eval=FALSE}
+# clean all variables in the workspace
+rm(list=ls())
+
+# First, substitute all fields "DIV/0!" by NA. This has been done in an editor before the file is read in R.
+
+trainRaw <- read.table(file="pml-training_1.csv", header=TRUE, sep=",", dec=".", quote="\"")
+problRaw <- read.table(file="pml-testing.csv",    header=TRUE, sep=",", dec=".", quote="\"")
+
+# trainAll ends with variable "classe"
+# problAll ends with variable "problem_id"
+
+# load the library for classification and regression trainingcece
+library(lattice)
+library(ggplot2)
+library(caret)
+
+# preprocessing: remove variables which are functionally (from expert knowledge) not usable as a feature
+var_to_be_removed <- c("X","user_name","raw_timestamp_part_1","raw_timestamp_part_2","cvtd_timestamp", "new_window", "num_window") 
+trainAll <- trainRaw[, !(names(trainRaw) %in% var_to_be_removed)]
+problAll <- problRaw[, !(names(problRaw) %in% var_to_be_removed)]
+
+# preprocessing: remove variables which are a factor or a boolean, except for the target
+Variable_to_be_removed <- function(var) { is.factor(var) | is.logical(var) }  # returns boolean
+var_to_be_removed <- sapply(trainAll, Variable_to_be_removed)
+# keep the target
+var_to_be_removed["classe"] = FALSE
+# sum(var_to_be_removed) gives 6, so 6 variables will be removed
+trainAll <- trainAll[, !var_to_be_removed]  # var_to_be_removed is boolean, use correct syntax
+problAll <- problAll[, !var_to_be_removed]
+# with str(trainAll, list.len=1000) it can be checked that all variables are not a factor or boolean any more
+
+# preprocessing: remove variables which only contain NA and at maximum one other value (has no information)
+# these variables with no information have zero variance, and standardisation, PCA etc. don't work on that
+# there is one variable with only NAs, and three with only NA and 0
+Variable_to_be_removed <- function(var) { (length(which(is.na(var))) > 0) & (length(unique(var)) <= 2) } # returns boolean
+var_to_be_removed <- sapply(trainAll, Variable_to_be_removed)
+# sum(var_to_be_removed) gives 3, so 3 variables will be removed
+# with which(var_to_be_removed) we can see which will be removed
+# it is the same as: var_to_be_removed <- c("amplitude_yaw_belt", "amplitude_yaw_dumbbell", "amplitude_yaw_forearm")
+trainAll <- trainAll[, !var_to_be_removed]
+problAll <- problAll[, !var_to_be_removed]
+
+# preprocessing: impute NA's with the median
+# because all columns must be numeric, discart the variable "classe"
+preProc <- preProcess(x=trainAll[,names(trainAll)!="classe"], method="medianImpute")
+# it seems that preProcess uses only 217 samples to determine the medians
+trainAll <- predict(preProc, trainAll)
+problAll <- predict(preProc, problAll)
+
+# standardise
+
+# Move last column to seperate data frames
+trainExpl <- trainAll[,names(trainAll)!="classe"]
+trainResp <- trainAll[,names(trainAll)=="classe"]
+problExpl <- problAll[,names(problAll)!="problem_id"]
+problID   <- problAll[,names(problAll)=="problem_id"]
+
+# Standardise all columns but the last column. The last column contains the classe or problem_id.
+trainS <- trainExpl
+problS <- problExpl
+for ( col in 1:length(trainExpl) ) {
+  mn <- mean(trainExpl[,col])
+  sd <-   sd(trainExpl[,col])
+  trainS[,col] <- (trainExpl[,col] - mn) / sd
+  problS[,col] <- (problExpl[,col] - mn) / sd
+}
+
+# Preprocessing: select a subset of the features using PCA.
+preProc <- preProcess(x=trainS, method="pca", thresh=0.90)  # increase thresh for higher accuracy  
+trainpp <- predict(object=preProc, trainS)
+problpp <- predict(object=preProc, problS)
+# for thresh=0.80: 31 variables are kept for medianImpute
+# for thresh=0.85: 37 variables are kept for medianImpute
+# for thresh=0.90: 46 variables are kept for medianImpute
+# for thresh=0.92: 51 variables are kept for medianImpute
+# for thresh=0.95: 61 variables are kept for medianImpute
+# for thresh=0.95: 63 variables are kept for medianImpute
+
+# Recombine the explanatory variables and the target / problem_ID.
+trainR95 <- cbind(trainpp, classe=trainResp)
+problR95 <- cbind(problpp, problem_id=problID)
+
+# Create training and test set  (can also use K-fold with e.g. K=10)
+# set.seed(1)
+# inTrain <- createDataPartition(y=trainR$classe, p=0.75, list=FALSE)
+# train <- trainR[inTrain,]
+# test  <- trainR[-inTrain,]
+
+# Now we have a train, test and probl set.
+
+# Use a classification tree
+# library(rpart)
+# modelCT <- train(classe~., data=train, method="rpart")
+# confusionMatrix(test$classe, predict(modelCT, newdata=test))
+# with PCA, thresh=0.80 and p=0.75 for train: accuracy=0.276
+# with PCA, thresh=0.95 and p=0.75 for train: accuracy=0.390
+
+# Too low accuracy, so move to random forest
+# For Random Forest
+
+# Set size of training set
+set.seed(42)
+inTrain <- createDataPartition(y=trainR95$classe, p=0.95, list=FALSE)
+train <- trainR95[inTrain,]
+test  <- trainR95[-inTrain,]
+
+# Create folds
+folds <- createFolds(y=train$classe, k=8, list=TRUE, returnTrain=TRUE)
+
+# Random Forest, without multi core processing
+# library(foreach)
+# library(iterators)
+# library(parallel)
+# library(doMC)
+# cl <- makeCluster(2) # use 2 CPU cores
+# registerDoMC(cl)
+library(randomForest)
+modelRF95 <- train(classe~., data=train, model="rf", ntree=100)
+# stopCluster(cl)
+confusionMatrix(test$classe, predict(modelRF95, newdata=test))
+# thresh  seed p      k  ntree accuracy  kappa (accuracy and kappa of the test set)
+#  0.95     ?  0.05   5    50    0.767
+#  0.95     1  0.10   5    50    0.823
+#  0.95     1  0.10   6    50    0.827   0.782
+#  0.95     1  0.15   6    50    0.863   0.827
+#  0.95     1  0.15   6   100    0.869   0.834
+#  0.95     1  0.25   5    50    0.911   0.887
+#  0.95     1  0.25  10   100    0.914   0.891  much slower than previous
+#  0.96     1  0.25   5    50    0.908   0.884  there are 2 variables more because of higher PCA threshold
+#  0.92     1  0.25   5    50    0.902   0.876
+#  0.90     1  0.50   4    40    0.937   0.920
+#  0.90     1  0.50   6    60    0.945   0.930
+#  0.90     1  0.80   6    80    0.966   0.957
+#  0.90     1  0.95   8   100    0.968   0.960
+#  0.95     1  0.95   8   100    0.968   0.960
+#  0.85    42  0.96   8   100    0.948   0.934
+#  0.90    42  0.95   8   100    0.961   0.951
+
+answers <- as.character(predict(modelRF95, newdata=problR95))
+
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+pml_write_files(answers)
+```
