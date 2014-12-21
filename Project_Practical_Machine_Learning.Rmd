@@ -1,0 +1,272 @@
+---
+output: pdf_document
+---
+## Practical Machine Learning: Human Activity Recognition
+
+
+### Executive Summary
+A prediction model was build to predict the activity a human is undertaking from the data avalaible in the Human Activity Recognition dataset delivered by [1].
+
+The final predictive model is a random forest with an cross-validated accuracy of 0.96 and a kappa of 0.95. The 95% confidence interval of the accuracy is (0.947, 0.972). Because cross-validation on a "untouched" test set was used, the obtained estimated accuracy is a reliable estimate for the accuracy.
+
+Last, the target of 20 problems were all correctly predicted with the model.
+
+### Getting and cleaning the data
+
+The data is available on the Coursera website.
+
+The training data set consists of 19.622 observations of 160 variables, from which 1 is the target variable. The target variable is in the last column, named "classe", and denotes one of five activities, denoted by an A, B, C, D or E.
+The second data set has the same number of columns, however, the last column is the problem ID, denoted by a number between 1 and 20.
+So, where the first training set includes the target, and therefore is useable for supervised learning, the second data set doesn't contain the target. Although the second data set is named "pml-testing.csv", a less confusing name, from machine learning point of view, would be something like "problem.csv". It is useable for testing the students, but not useable for testing the prediction model :-)
+
+First step in the cleaning is dropping the variables which are not useful for the prediction. For example, the row number is clearly not useful for predicting the outcome...
+
+Also, as there are no time-series used in the prediction, the time-stamps were dropped. In both the training set and the problem set, the following variables were dropped:
+"X","user_name","raw_timestamp_part_1","raw_timestamp_part_2","cvtd_timestamp", "new_window", "num_window".
+
+To start easy, all variables which are boolean or a factor were dropped, again in both sets. All cleaning, and all transformations must be undertaken on both sets, as the problem set must stay in sync with the training set, because later on, the prediction model will be aplied to the problem set to obtain predictions of the target variable.
+
+All occurrences of "#DIV/0!" were replaced by NA.
+
+Next, all variables where all observations only contain NA were dropped, as these clearly have no information.
+
+Variables which only contain 1 unique value were dropped too, as these contain also no useful information from prediction point of view, for discriminating between different observations.
+
+### Preprocessing the data
+
+First, all NA's were replaced with a value obtained by imputing the median. Perhaps imputing with a K-nearest neighbour algorithm would give better results. However, as a first try, it is always nice to start simple, and build from there whenever you need more precise results. And, as shown later, this was sufficient.
+
+Then, all colums were standardised. The mean and standard deviation of each column of the training set were determined. With the means and standard deviations (of the training set!), the training set was standardised, and the same transformation was applied to the problem set. Standardisation is a good step before applying PCA.
+
+PCA was applied to keep most information, but to reduce the number of variables. Later on, it is established that keeping 90% of the variance, which reduced the set from some 143 to 46 variables, delivered a sufficiently good prediction model to get all 20 problems right.
+By trying different values of the variance to be kept, and then making a prediction model and taking the accuracy determined on an untouched test set, a reasonable value of this parameter was obtained.
+
+Next the training set is split in a training set and test set to enable cross-validation and obtaining a very reliable estime of the accuracy of the model built. This test set is labeled (in contrast to the file "pml-testing.csv"!), so this set can be used to establish the accuracy of the model. As the original training set contains almost 20.000 labeled observations, and there are 5 different outcomes for the target, taking 95% of the observations for training the model, and 5% of the observations, which are still almost 1000 labeled observations for the test set, did nicely.
+
+### Prediction model
+
+Generally, a random forest delivers good results. So, a random forest is used.
+
+There are several methods for slicing the training data. Here, K-fold is used. Also, there are other parameters which both influence the computation time and the accuracy of the model. As it takes the full model to run about half an hour, the number of runs is limited.
+
+First was started with a small data set, of just 5% of all observations. Then, gradually, the number of observations in the training set was increased, and different values of K for the K-fold splicing and different values of the number of trees to be grown, were tested.
+
+Appendix A lists the models which were built.
+
+A PCA where 90% or 95% of the variance is kept delivered good results. Also, it was established that a K of 6 or 8 seemed sufficient. Last, for the number of trees, 50 or 100 seemed enough.
+
+The R code is in appendix B.
+
+### Result
+
+The result is a random forest prediction model with an cross-validated accuracy of 0.96 and a kappa of 0.95. Cross-validation was used to determine the performance of the random forest model. This was done by first splitting the training data in a set used for training the model, and a test set, which was not used for training the model. By applying the model to the test set, and comparing the predictions of the model with the known targets in the test set, the accuracy was determined. This was done with the confustionMatrix statement as shown below. The 95% confidence interval of the accuracy is (0.947, 0.972).
+
+
+
+The confusion matrix and statistics, for the test set, are:
+```{r eval=FALSE}
+confusionMatrix(test$classe, predict(modelRF95, newdata=test))
+
+Confusion Matrix and Statistics
+
+          Reference
+Prediction   A   B   C   D   E
+         A 273   1   2   3   0
+         B   8 176   3   1   1
+         C   0   3 164   2   2
+         D   1   0   8 150   1
+         E   0   1   0   1 178
+
+Overall Statistics
+                                          
+               Accuracy : 0.9612          
+                 95% CI : (0.9471, 0.9724)
+    No Information Rate : 0.288           
+    P-Value [Acc > NIR] : < 2.2e-16       
+                                          
+                  Kappa : 0.9509          
+ Mcnemar's Test P-Value : NA              
+
+Statistics by Class:
+
+                     Class: A Class: B Class: C Class: D Class: E
+Sensitivity            0.9681   0.9724   0.9266   0.9554   0.9780
+Specificity            0.9914   0.9837   0.9913   0.9878   0.9975
+Pos Pred Value         0.9785   0.9312   0.9591   0.9375   0.9889
+Neg Pred Value         0.9871   0.9937   0.9839   0.9915   0.9950
+Prevalence             0.2880   0.1849   0.1808   0.1604   0.1859
+Detection Rate         0.2789   0.1798   0.1675   0.1532   0.1818
+Detection Prevalence   0.2850   0.1931   0.1747   0.1634   0.1839
+Balanced Accuracy      0.9797   0.9780   0.9589   0.9716   0.9878```
+```
+
+### References
+
+[1] Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. Qualitative Activity Recognition of Weight Lifting Exercises. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13) . Stuttgart, Germany: ACM SIGCHI, 2013. website: http://groupware.les.inf.puc-rio.br/har
+
+
+### Appendix A
+
+The models were build with the parameters as described in the first five columns of the table below. The obtained accuracy and kappa are on the test set. The (labeled) observations of the test set were not used for building the random forest.
+
+```{r eval=FALSE}
+PCA   | seed | p     | K  | ntree | accuracy | kappa (accuracy and kappa of the test set)
+thresh
+0.95  |   ? |  0.05  |  5 |   50  |  0.767  |  ?
+0.95  |   1 |  0.10  |  5 |   50  |  0.823  |  ?
+0.95  |   1 |  0.10  |  6 |   50  |  0.827  |  0.782
+0.95  |   1 |  0.15  |  6 |   50  |  0.863  |  0.827
+0.95  |   1 |  0.15  |  6 |  100  |  0.869  |  0.834
+0.95  |   1 |  0.25  |  5 |   50  |  0.911  |  0.887
+0.95  |   1 |  0.25  | 10 |  100  |  0.914  |  0.891  much slower than previous
+0.96  |   1 |  0.25  |  5 |   50  |  0.908  |  0.884  there are 2 variables more because of higher PCA threshold
+0.92  |   1 |  0.25  |  5 |   50  |  0.902  |  0.876
+0.90  |   1 |  0.50  |  4 |   40  |  0.937  |  0.920
+0.90  |   1 |  0.50  |  6 |   60  |  0.945  |  0.930
+0.90  |   1 |  0.80  |  6 |   80  |  0.966  |  0.957
+0.90  |   1 |  0.95  |  8 |  100  |  0.968  |  0.960
+0.95  |   1 |  0.95  |  8 |  100  |  0.968  |  0.960
+0.85  |  42 |  0.96  |  8 |  100  |  0.948  |  0.934
+0.90  |  42 |  0.95  |  8 |  100  |  0.961  |  0.951
+```
+
+
+### Appendix B
+
+```{r, eval=FALSE}
+
+# clean all variables in the workspace
+rm(list=ls())
+
+# First, substitute all fields "DIV/0!" by NA. This has been done in an editor before the file is read in R.
+
+trainRaw <- read.table(file="pml-training_1.csv", header=TRUE, sep=",", dec=".", quote="\"")
+problRaw <- read.table(file="pml-testing.csv",    header=TRUE, sep=",", dec=".", quote="\"")
+
+# trainAll ends with variable "classe"
+# problAll ends with variable "problem_id"
+
+# load the library for classification and regression trainingcece
+library(lattice)
+library(ggplot2)
+library(caret)
+
+# preprocessing: remove variables which are functionally (from expert knowledge) not usable as a feature
+var_to_be_removed <- c("X","user_name","raw_timestamp_part_1","raw_timestamp_part_2","cvtd_timestamp", "new_window", "num_window") 
+trainAll <- trainRaw[, !(names(trainRaw) %in% var_to_be_removed)]
+problAll <- problRaw[, !(names(problRaw) %in% var_to_be_removed)]
+
+# preprocessing: remove variables which are a factor or a boolean, except for the target
+Variable_to_be_removed <- function(var) { is.factor(var) | is.logical(var) }  # returns boolean
+var_to_be_removed <- sapply(trainAll, Variable_to_be_removed)
+# keep the target
+var_to_be_removed["classe"] = FALSE
+# sum(var_to_be_removed) gives 6, so 6 variables will be removed
+trainAll <- trainAll[, !var_to_be_removed]  # var_to_be_removed is boolean, use correct syntax
+problAll <- problAll[, !var_to_be_removed]
+# with str(trainAll, list.len=1000) it can be checked that all variables are not a factor or boolean any more
+
+# preprocessing: remove variables which only contain NA and at maximum one other value (has no information)
+# these variables with no information have zero variance, and standardisation, PCA etc. don't work on that
+# there is one variable with only NAs, and three with only NA and 0
+Variable_to_be_removed <- function(var) { (length(which(is.na(var))) > 0) & (length(unique(var)) <= 2) } # returns boolean
+var_to_be_removed <- sapply(trainAll, Variable_to_be_removed)
+# sum(var_to_be_removed) gives 3, so 3 variables will be removed
+# with which(var_to_be_removed) we can see which will be removed
+# it is the same as: var_to_be_removed <- c("amplitude_yaw_belt", "amplitude_yaw_dumbbell", "amplitude_yaw_forearm")
+trainAll <- trainAll[, !var_to_be_removed]
+problAll <- problAll[, !var_to_be_removed]
+
+# preprocessing: impute NA's with the median
+# because all columns must be numeric, discart the variable "classe"
+preProc <- preProcess(x=trainAll[,names(trainAll)!="classe"], method="medianImpute")
+# it seems that preProcess uses only 217 samples to determine the medians
+trainAll <- predict(preProc, trainAll)
+problAll <- predict(preProc, problAll)
+
+# standardise
+
+# Move last column to seperate data frames
+trainExpl <- trainAll[,names(trainAll)!="classe"]
+trainResp <- trainAll[,names(trainAll)=="classe"]
+problExpl <- problAll[,names(problAll)!="problem_id"]
+problID   <- problAll[,names(problAll)=="problem_id"]
+
+# Standardise all columns but the last column. The last column contains the classe or problem_id.
+trainS <- trainExpl
+problS <- problExpl
+for ( col in 1:length(trainExpl) ) {
+  mn <- mean(trainExpl[,col])
+  sd <-   sd(trainExpl[,col])
+  trainS[,col] <- (trainExpl[,col] - mn) / sd
+  problS[,col] <- (problExpl[,col] - mn) / sd
+}
+
+# Preprocessing: select a subset of the features using PCA.
+preProc <- preProcess(x=trainS, method="pca", thresh=0.90)  # increase thresh for higher accuracy  
+trainpp <- predict(object=preProc, trainS)
+problpp <- predict(object=preProc, problS)
+# for thresh=0.80: 31 variables are kept for medianImpute
+# for thresh=0.85: 37 variables are kept for medianImpute
+# for thresh=0.90: 46 variables are kept for medianImpute
+# for thresh=0.92: 51 variables are kept for medianImpute
+# for thresh=0.95: 61 variables are kept for medianImpute
+# for thresh=0.95: 63 variables are kept for medianImpute
+
+# Recombine the explanatory variables and the target / problem_ID.
+trainR95 <- cbind(trainpp, classe=trainResp)
+problR95 <- cbind(problpp, problem_id=problID)
+
+# Create training and test set  (can also use K-fold with e.g. K=10)
+# set.seed(1)
+# inTrain <- createDataPartition(y=trainR$classe, p=0.75, list=FALSE)
+# train <- trainR[inTrain,]
+# test  <- trainR[-inTrain,]
+
+# Now we have a train, test and probl set.
+
+# Use a classification tree
+# library(rpart)
+# modelCT <- train(classe~., data=train, method="rpart")
+# confusionMatrix(test$classe, predict(modelCT, newdata=test))
+# with PCA, thresh=0.80 and p=0.75 for train: accuracy=0.276
+# with PCA, thresh=0.95 and p=0.75 for train: accuracy=0.390
+
+# Too low accuracy, so move to random forest
+# For Random Forest
+
+# Set size of training set
+set.seed(42)
+inTrain <- createDataPartition(y=trainR95$classe, p=0.95, list=FALSE)
+train <- trainR95[inTrain,]
+test  <- trainR95[-inTrain,]
+
+# Create folds
+folds <- createFolds(y=train$classe, k=8, list=TRUE, returnTrain=TRUE)
+
+# Random Forest, without multi core processing
+# library(foreach)
+# library(iterators)
+# library(parallel)
+# library(doMC)
+# cl <- makeCluster(2) # use 2 CPU cores
+# registerDoMC(cl)
+library(randomForest)
+modelRF95 <- train(classe~., data=train, model="rf", ntree=100)
+# stopCluster(cl)
+
+confusionMatrix(test$classe, predict(modelRF95, newdata=test))
+
+answers <- as.character(predict(modelRF95, newdata=problR95))
+
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+pml_write_files(answers)
+
+```
